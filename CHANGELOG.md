@@ -9,28 +9,7 @@ and this project adheres to [Semantic Versioning].
 
 ### Added
 
-- Multi-instance support: each working directory gets its own vekna
-  server, tmux session, and Unix socket, keyed on a stem derived from
-  the directory name plus a short hash of the absolute path. Run
-  `vekna` from any project directory and it will not collide with
-  other running instances.
-- Typing-aware focus: if a keystroke landed in another pane within the
-  last three seconds, `vekna notify` skips `select-pane` and sets the
-  tmux window attention flag instead. A periodic poll clears the flag
-  once the user reaches the pane on their own.
-
 ### Changed
-
-- `vekna notify` now reads `$TMUX` as well as `$TMUX_PANE` and routes
-  automatically to the server that owns the calling pane — the global
-  Claude Code hook stays literally `vekna notify` with no arguments.
-- The Unix socket path is no longer the hardcoded `/tmp/vekna.sock`;
-  it is now `/tmp/vekna-<basename>-<hash>.sock`, one per project.
-- Package renamed from `antistes` to `vekna` across the source tree,
-  imports, entry point, and linter configs. Install and import as
-  `vekna`; the old name is gone.
-- Socket messages use pydantic models, giving client and server a typed
-  contract in place of ad-hoc dicts.
 
 ### Deprecated
 
@@ -49,13 +28,32 @@ and this project adheres to [Semantic Versioning].
 - Asyncio unix socket server runs alongside the tmux session
 - Socket client sends pane ID over `/tmp/vekna.sock`
 - Window and pane switching on notification (`select-window` + `select-pane`)
-
+- Multi-instance support: each working directory gets its own vekna
+  server, tmux session, and Unix socket, keyed on a stem derived from
+  the directory name plus a short hash of the absolute path. Run
+  `vekna` from any project directory and it will not collide with
+  other running instances.
+- Typing-aware focus: if a keystroke landed in another pane within the
+  last three seconds, `vekna notify` skips `select-pane` and sets the
+  tmux window attention flag instead. A periodic poll clears the flag
+  once the user reaches the pane on their own.
+  
 ### Changed
 
 - CLI entry point renamed from `antistes` to `vekna`
 - CLI restructured as a click group to support subcommands
 - Tmux management rewritten with libtmux (replaces raw subprocess calls)
 - `ServerMill.run()` is now async; tmux attach runs in a thread executor
+- `vekna notify` now reads `$TMUX` as well as `$TMUX_PANE` and routes
+  automatically to the server that owns the calling pane — the global
+  Claude Code hook stays literally `vekna notify` with no arguments.
+- The Unix socket path is no longer the hardcoded `/tmp/vekna.sock`;
+  it is now `/tmp/vekna-<basename>-<hash>.sock`, one per project.
+- Package renamed from `antistes` to `vekna` across the source tree,
+  imports, entry point, and linter configs. Install and import as
+  `vekna`; the old name is gone.
+- Socket messages use pydantic models, giving client and server a typed
+  contract in place of ad-hoc dicts.
 
 ### Removed
 
