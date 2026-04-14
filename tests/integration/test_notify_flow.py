@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING
+from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
@@ -6,9 +6,6 @@ import pytest
 from vekna.links.socket_client import SocketClientLink
 from vekna.links.socket_server import SocketServerLink
 from vekna.pacts.notify import OK_RESPONSE
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 
 class TestNotifyFlow:

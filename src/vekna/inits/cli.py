@@ -1,5 +1,6 @@
 from pathlib import Path
-from typing import TYPE_CHECKING
+
+from click import Group
 
 from vekna.gates.cli.click.command import ClickGate
 from vekna.links.socket_client import SocketClientLink
@@ -7,6 +8,8 @@ from vekna.links.socket_server import SocketServerLink
 from vekna.links.tmux import TmuxLink
 from vekna.mills.notify import NotifyClientMill
 from vekna.mills.server import ServerMill
+from vekna.pacts.notify import NotifyClientMillProtocol
+from vekna.pacts.server import ServerMillProtocol
 from vekna.specs import (
     ATTENTION_POLL_INTERVAL_SECONDS,
     ATTENTION_WINDOW_STATUS_STYLE,
@@ -15,12 +18,6 @@ from vekna.specs import (
     stem_for_cwd,
     stem_from_tmux_env,
 )
-
-if TYPE_CHECKING:
-    from click import Group
-
-    from vekna.pacts.notify import NotifyClientMillProtocol
-    from vekna.pacts.server import ServerMillProtocol
 
 
 def _build_server_mill() -> ServerMillProtocol:

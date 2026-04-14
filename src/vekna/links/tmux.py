@@ -1,10 +1,7 @@
 import time
-from typing import TYPE_CHECKING
 
 import libtmux
-
-if TYPE_CHECKING:
-    from libtmux.common import tmux_cmd
+from libtmux.common import tmux_cmd
 
 
 class TmuxLink:

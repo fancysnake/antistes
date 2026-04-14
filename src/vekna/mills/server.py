@@ -1,15 +1,12 @@
 import asyncio
 import contextlib
 import itertools
-from typing import TYPE_CHECKING
 
 from pydantic import ValidationError
 
 from vekna.pacts.notify import ERROR_RESPONSE_INVALID, OK_RESPONSE, NotifyRequest
-
-if TYPE_CHECKING:
-    from vekna.pacts.socket import SocketServerLinkProtocol
-    from vekna.pacts.tmux import TmuxLinkProtocol
+from vekna.pacts.socket import SocketServerLinkProtocol
+from vekna.pacts.tmux import TmuxLinkProtocol
 
 
 class ServerMill:

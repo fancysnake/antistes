@@ -1,9 +1,6 @@
 import asyncio
+from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
 
 
 class SocketServerLink:

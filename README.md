@@ -5,7 +5,7 @@ tmux. One agent calls `vekna notify` → tmux jumps to its pane.
 
 ## Requires
 
-- Python 3.14+
+- Python 3.10+
 - `tmux` installed
 
 ## Install

@@ -1,9 +1,5 @@
-from typing import TYPE_CHECKING
-
 from vekna.pacts.notify import NotifyRequest
-
-if TYPE_CHECKING:
-    from vekna.pacts.socket import SocketClientLinkProtocol
+from vekna.pacts.socket import SocketClientLinkProtocol
 
 
 class NotifyClientMill:

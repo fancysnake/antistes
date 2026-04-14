@@ -1,18 +1,11 @@
 import asyncio
 import os
-from typing import TYPE_CHECKING
+from collections.abc import Callable
 
 import click
 
-if TYPE_CHECKING:
-    from collections.abc import Callable
-
-    from vekna.pacts.notify import NotifyClientMillProtocol
-    from vekna.pacts.server import ServerMillProtocol
-
-    ServerMillFactory = Callable[[], ServerMillProtocol]
-    NotifyClientMillFactory = Callable[[str], NotifyClientMillProtocol]
-
+from vekna.pacts.notify import NotifyClientMillProtocol
+from vekna.pacts.server import ServerMillProtocol
 
 _MISSING_TMUX_MSG = (
     "TMUX and TMUX_PANE must be set — run `vekna notify` from inside a tmux pane"
@@ -22,8 +15,8 @@ _MISSING_TMUX_MSG = (
 class ClickGate:
     def __init__(
         self,
-        server_mill_factory: ServerMillFactory,
-        notify_client_mill_factory: NotifyClientMillFactory,
+        server_mill_factory: Callable[[], ServerMillProtocol],
+        notify_client_mill_factory: Callable[[str], NotifyClientMillProtocol],
     ) -> None:
         self._server_mill_factory = server_mill_factory
         self._notify_client_mill_factory = notify_client_mill_factory

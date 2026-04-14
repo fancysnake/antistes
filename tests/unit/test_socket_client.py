@@ -1,13 +1,10 @@
 import asyncio
-from typing import TYPE_CHECKING
+from pathlib import Path
 
 import pytest
 
 from vekna.links.socket_client import SocketClientLink
 from vekna.pacts.notify import OK_RESPONSE
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 
 def _socket_path(tmp_path: Path) -> str:
