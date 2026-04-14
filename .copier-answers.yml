@@ -1,0 +1,6 @@
+_commit: 14b69b4
+_src_path: gh:fancysnake/exemplar
+package: vekna
+package_author: Radosław Ganczarek <radoslaw@ganczarek.in>
+package_description: Coding agent overseer
+package_license: BSD-3-Clause license
