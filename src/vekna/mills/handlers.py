@@ -1,7 +1,7 @@
 import asyncio
 import itertools
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from vekna.pacts.bus import EventBusProtocol
 from vekna.pacts.notify import Event
@@ -12,12 +12,31 @@ class _ClaudeNotificationPayload(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
 
+class DisplayErrorHandler:
+    def __init__(self, tmux: TmuxLinkProtocol) -> None:
+        self._tmux = tmux
+
+    async def __call__(self, event: Event) -> None:
+        self._tmux.display_message(event.payload)
+
+
 class ClaudeNotificationHandler:
     def __init__(self, bus: EventBusProtocol) -> None:
         self._bus = bus
 
     async def __call__(self, event: Event) -> None:
-        _ClaudeNotificationPayload.model_validate_json(event.payload)
+        try:
+            _ClaudeNotificationPayload.model_validate_json(event.payload)
+        except ValidationError:
+            self._bus.publish(
+                Event(
+                    app="vekna",
+                    hook="Error",
+                    payload="invalid claude notification payload",
+                    meta={},
+                )
+            )
+            return
         if not (pane_id := event.meta.get("TMUX_PANE", "")):
             return
         self._bus.publish(
@@ -26,24 +45,12 @@ class ClaudeNotificationHandler:
 
 
 class SelectPaneHandler:
-    def __init__(self, tmux: TmuxLinkProtocol, idle_threshold_seconds: float) -> None:
-        self._tmux = tmux
-        self._idle_threshold_seconds = idle_threshold_seconds
+    """Select the pane or mark its window, depending on user activity.
 
-    async def __call__(self, event: Event) -> None:
-        if self._tmux.last_activity_seconds_ago() < self._idle_threshold_seconds:
-            return
-        self._tmux.select_pane(event.payload)
-
-
-class MarkWindowHandler:
-    """Mark the originating window red when the user is active.
-
-    Registered for ("vekna", "SelectPane") alongside SelectPaneHandler.
-    When the user has been active recently the pane switch is suppressed
-    and this handler highlights the source window instead.  Call
-    clear_marks_loop() as a background task to remove the mark once
-    the user navigates to the window.
+    When the user is idle the pane is switched to immediately.  When
+    the user is active the source window is highlighted instead and
+    cleared once the user navigates to it.  Call clear_marks_loop() as
+    a background task to handle that cleanup.
     """
 
     def __init__(
@@ -58,11 +65,12 @@ class MarkWindowHandler:
         self._marked_windows: set[str] = set()
 
     async def __call__(self, event: Event) -> None:
-        if self._tmux.last_activity_seconds_ago() >= self._idle_threshold_seconds:
-            return
-        if (window_id := self._tmux.window_id_for_pane(event.payload)) is not None:
-            self._tmux.mark_window(window_id)
-            self._marked_windows.add(window_id)
+        if self._tmux.last_activity_seconds_ago() < self._idle_threshold_seconds:
+            if (window_id := self._tmux.window_id_for_pane(event.payload)) is not None:
+                self._tmux.mark_window(window_id)
+                self._marked_windows.add(window_id)
+        else:
+            self._tmux.select_pane(event.payload)
 
     async def clear_marks_loop(self) -> None:
         """Poll and unmark windows as the user navigates to them."""

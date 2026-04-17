@@ -4,8 +4,6 @@ from unittest.mock import MagicMock, call, patch
 
 from vekna.links.tmux import TmuxLink
 
-_KEYSTROKE_OFFSET = 5
-_KEYSTROKE_TOLERANCE = 2
 _ACTIVITY_OFFSET = 10
 _ACTIVITY_TOLERANCE = 2
 
@@ -73,37 +71,6 @@ class TestSelectPane:
             call("select-window", "-t", "%3"),
             call("select-pane", "-t", "%3"),
         ]
-
-
-class TestSecondssinceLastKeystroke:
-    @staticmethod
-    def test_returns_none_when_no_stdout() -> None:
-        link, server = _make_link()
-        server.cmd.return_value = _mock_cmd(stdout=[])
-
-        result = link.seconds_since_last_keystroke()
-
-        assert result is None
-
-    @staticmethod
-    def test_returns_none_when_value_is_not_an_integer() -> None:
-        link, server = _make_link()
-        server.cmd.return_value = _mock_cmd(stdout=["not-a-number"])
-
-        result = link.seconds_since_last_keystroke()
-
-        assert result is None
-
-    @staticmethod
-    def test_returns_elapsed_seconds_since_activity() -> None:
-        link, server = _make_link()
-        now = int(time.time())
-        server.cmd.return_value = _mock_cmd(stdout=[str(now - _KEYSTROKE_OFFSET)])
-
-        result = link.seconds_since_last_keystroke()
-
-        assert result is not None
-        assert _KEYSTROKE_OFFSET - 1 < result < _KEYSTROKE_OFFSET + _KEYSTROKE_TOLERANCE
 
 
 class TestWindowIdForPane:
@@ -176,6 +143,18 @@ class TestUnmarkWindow:
 
         server.cmd.assert_called_once_with(
             "set-window-option", "-u", "-t", "@3", "window-status-style"
+        )
+
+
+class TestDisplayMessage:
+    @staticmethod
+    def test_sends_display_message_to_session() -> None:
+        link, server = _make_link(session_name="work")
+
+        link.display_message("something went wrong")
+
+        server.cmd.assert_called_once_with(
+            "display-message", "-t", "work", "something went wrong"
         )
 
 

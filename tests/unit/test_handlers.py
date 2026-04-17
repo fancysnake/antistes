@@ -6,7 +6,7 @@ import pytest
 
 from vekna.mills.handlers import (
     ClaudeNotificationHandler,
-    MarkWindowHandler,
+    DisplayErrorHandler,
     SelectPaneHandler,
 )
 from vekna.pacts.notify import Event
@@ -27,13 +27,24 @@ def _select_pane_event(pane_id: str = "%3") -> Event:
 
 
 def _make_select_pane_handler(tmux: MagicMock) -> SelectPaneHandler:
-    return SelectPaneHandler(tmux=tmux, idle_threshold_seconds=_THRESHOLD)
-
-
-def _make_mark_window_handler(tmux: MagicMock) -> MarkWindowHandler:
-    return MarkWindowHandler(
+    return SelectPaneHandler(
         tmux=tmux, idle_threshold_seconds=_THRESHOLD, poll_interval_seconds=_POLL
     )
+
+
+class TestDisplayErrorHandler:
+    @staticmethod
+    @pytest.mark.asyncio
+    async def test_displays_payload_as_message() -> None:
+        tmux = MagicMock()
+        handler = DisplayErrorHandler(tmux)
+        event = Event(
+            app="vekna", hook="Error", payload="something went wrong", meta={}
+        )
+
+        await handler(event)
+
+        tmux.display_message.assert_called_once_with("something went wrong")
 
 
 class TestClaudeNotificationHandler:
@@ -58,7 +69,52 @@ class TestClaudeNotificationHandler:
 
         await handler(_notification_event(payload=payload))
 
-        bus.publish.assert_called_once()
+        bus.publish.assert_called_once_with(
+            Event(app="vekna", hook="SelectPane", payload="%3", meta={})
+        )
+
+    @staticmethod
+    @pytest.mark.asyncio
+    async def test_publishes_error_event_on_invalid_payload() -> None:
+        bus = MagicMock()
+        handler = ClaudeNotificationHandler(bus)
+        event = Event(
+            app="claude",
+            hook="Notification",
+            payload="not json",
+            meta={"TMUX_PANE": "%3"},
+        )
+
+        await handler(event)
+
+        bus.publish.assert_called_once_with(
+            Event(
+                app="vekna",
+                hook="Error",
+                payload="invalid claude notification payload",
+                meta={},
+            )
+        )
+
+    @staticmethod
+    @pytest.mark.asyncio
+    async def test_publishes_error_event_on_empty_payload() -> None:
+        bus = MagicMock()
+        handler = ClaudeNotificationHandler(bus)
+        event = Event(
+            app="claude", hook="Notification", payload="", meta={"TMUX_PANE": "%3"}
+        )
+
+        await handler(event)
+
+        bus.publish.assert_called_once_with(
+            Event(
+                app="vekna",
+                hook="Error",
+                payload="invalid claude notification payload",
+                meta={},
+            )
+        )
 
     @staticmethod
     @pytest.mark.asyncio
@@ -110,9 +166,10 @@ class TestSelectPaneHandler:
 
     @staticmethod
     @pytest.mark.asyncio
-    async def test_skips_when_user_is_active() -> None:
+    async def test_does_not_select_pane_when_user_is_active() -> None:
         tmux = MagicMock()
         tmux.last_activity_seconds_ago.return_value = _THRESHOLD - 0.1
+        tmux.window_id_for_pane.return_value = None
         handler = _make_select_pane_handler(tmux)
 
         await handler(_select_pane_event("%7"))
@@ -124,9 +181,10 @@ class TestSelectPaneHandler:
     async def test_checks_activity_each_call() -> None:
         tmux = MagicMock()
         tmux.last_activity_seconds_ago.side_effect = [
-            _THRESHOLD - 0.1,  # first call: active, skip
+            _THRESHOLD - 0.1,  # first call: active, mark
             _THRESHOLD + 1.0,  # second call: idle, switch
         ]
+        tmux.window_id_for_pane.return_value = None
         handler = _make_select_pane_handler(tmux)
 
         await handler(_select_pane_event("%7"))
@@ -135,15 +193,13 @@ class TestSelectPaneHandler:
         tmux.select_pane.assert_called_once_with("%7")
         assert tmux.last_activity_seconds_ago.call_args_list == [call(), call()]
 
-
-class TestMarkWindowHandler:
     @staticmethod
     @pytest.mark.asyncio
     async def test_marks_window_when_user_is_active() -> None:
         tmux = MagicMock()
         tmux.last_activity_seconds_ago.return_value = _THRESHOLD - 0.1
         tmux.window_id_for_pane.return_value = "@5"
-        handler = _make_mark_window_handler(tmux)
+        handler = _make_select_pane_handler(tmux)
 
         await handler(_select_pane_event("%3"))
 
@@ -154,7 +210,7 @@ class TestMarkWindowHandler:
     async def test_does_not_mark_when_user_is_idle() -> None:
         tmux = MagicMock()
         tmux.last_activity_seconds_ago.return_value = _THRESHOLD
-        handler = _make_mark_window_handler(tmux)
+        handler = _make_select_pane_handler(tmux)
 
         await handler(_select_pane_event("%3"))
 
@@ -166,14 +222,26 @@ class TestMarkWindowHandler:
         tmux = MagicMock()
         tmux.last_activity_seconds_ago.return_value = _THRESHOLD - 0.1
         tmux.window_id_for_pane.return_value = None
-        handler = _make_mark_window_handler(tmux)
+        handler = _make_select_pane_handler(tmux)
 
         await handler(_select_pane_event("%3"))
 
         tmux.mark_window.assert_not_called()
 
+    @staticmethod
+    @pytest.mark.asyncio
+    async def test_activity_checked_once_per_event() -> None:
+        tmux = MagicMock()
+        tmux.last_activity_seconds_ago.return_value = _THRESHOLD - 0.1
+        tmux.window_id_for_pane.return_value = "@5"
+        handler = _make_select_pane_handler(tmux)
 
-class TestMarkWindowHandlerClearMarks:
+        await handler(_select_pane_event("%3"))
+
+        tmux.last_activity_seconds_ago.assert_called_once()
+
+
+class TestSelectPaneHandlerClearMarks:
     @staticmethod
     @pytest.mark.asyncio
     async def test_unmarks_window_when_it_becomes_active() -> None:
@@ -181,7 +249,7 @@ class TestMarkWindowHandlerClearMarks:
         tmux.last_activity_seconds_ago.return_value = _THRESHOLD - 0.1
         tmux.window_id_for_pane.return_value = "@5"
         tmux.active_window_id.return_value = "@5"
-        handler = _make_mark_window_handler(tmux)
+        handler = _make_select_pane_handler(tmux)
 
         await handler(_select_pane_event("%3"))
         handler.clear_marks_once()
@@ -192,7 +260,7 @@ class TestMarkWindowHandlerClearMarks:
     def test_does_not_unmark_when_active_window_not_marked() -> None:
         tmux = MagicMock()
         tmux.active_window_id.return_value = "@7"
-        handler = _make_mark_window_handler(tmux)
+        handler = _make_select_pane_handler(tmux)
 
         handler.clear_marks_once()
 
@@ -202,7 +270,7 @@ class TestMarkWindowHandlerClearMarks:
     @pytest.mark.asyncio
     async def test_clear_marks_loop_exits_when_iterator_exhausted() -> None:
         tmux = MagicMock()
-        handler = _make_mark_window_handler(tmux)
+        handler = _make_select_pane_handler(tmux)
 
         with patch("vekna.mills.handlers.itertools.count", return_value=iter([])):
             await handler.clear_marks_loop()
@@ -212,7 +280,7 @@ class TestMarkWindowHandlerClearMarks:
     async def test_clear_marks_loop_sleeps_and_calls_clear_marks_once() -> None:
         tmux = MagicMock()
         tmux.active_window_id.return_value = None
-        handler = _make_mark_window_handler(tmux)
+        handler = _make_select_pane_handler(tmux)
         sleep_mock = AsyncMock(side_effect=[None, asyncio.CancelledError])
 
         with (
@@ -230,7 +298,7 @@ class TestMarkWindowHandlerClearMarks:
         tmux.last_activity_seconds_ago.return_value = _THRESHOLD - 0.1
         tmux.window_id_for_pane.return_value = "@5"
         tmux.active_window_id.return_value = "@5"
-        handler = _make_mark_window_handler(tmux)
+        handler = _make_select_pane_handler(tmux)
 
         await handler(_select_pane_event("%3"))
         handler.clear_marks_once()

@@ -9,7 +9,7 @@ from vekna.links.tmux import TmuxLink
 from vekna.mills.bus import EventBus
 from vekna.mills.handlers import (
     ClaudeNotificationHandler,
-    MarkWindowHandler,
+    DisplayErrorHandler,
     SelectPaneHandler,
 )
 from vekna.mills.notify import NotifyClientMill
@@ -36,19 +36,17 @@ def _build_server_mill() -> ServerMillProtocol:
     )
     socket_server_link = SocketServerLink(socket_path=unix_socket_path)
     bus = EventBus()
-    mark_handler = MarkWindowHandler(
+    select_handler = SelectPaneHandler(
         tmux_link, IDLE_THRESHOLD_SECONDS, ATTENTION_POLL_INTERVAL_SECONDS
     )
-    bus.register("vekna", "SelectPane", mark_handler)
-    bus.register(
-        "vekna", "SelectPane", SelectPaneHandler(tmux_link, IDLE_THRESHOLD_SECONDS)
-    )
+    bus.register("vekna", "SelectPane", select_handler)
+    bus.register("vekna", "Error", DisplayErrorHandler(tmux_link))
     bus.register("claude", "Notification", ClaudeNotificationHandler(bus))
     return ServerMill(
         tmux=tmux_link,
         socket_server=socket_server_link,
         bus=bus,
-        background=[mark_handler.clear_marks_loop],
+        background=[select_handler.clear_marks_loop],
     )
 
 
