@@ -4,29 +4,15 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from vekna.mills.server import ServerMill
-from vekna.pacts.notify import ERROR_RESPONSE_INVALID, OK_RESPONSE
+from vekna.pacts.notify import ERROR_RESPONSE_INVALID, OK_RESPONSE, Event
 
 
-def _make_tmux(
-    *,
-    idle: float | None = None,
-    window_id: str | None = "@1",
-    active_window: str | None = None,
-) -> MagicMock:
-    tmux = MagicMock()
-    tmux.seconds_since_last_keystroke.return_value = idle
-    tmux.window_id_for_pane.return_value = window_id
-    tmux.active_window_id.return_value = active_window
-    return tmux
+def _make_tmux() -> MagicMock:
+    return MagicMock()
 
 
 def _make_mill(tmux: MagicMock, socket_server: AsyncMock) -> ServerMill:
-    return ServerMill(
-        tmux=tmux,
-        socket_server=socket_server,
-        activity_threshold_seconds=5.0,
-        poll_interval_seconds=1.0,
-    )
+    return ServerMill(tmux=tmux, socket_server=socket_server, bus=MagicMock())
 
 
 def _event_json(pane_id: str = "%3") -> str:
@@ -93,160 +79,59 @@ class TestRun:
 class TestHandle:
     @staticmethod
     @pytest.mark.asyncio
-    async def test_calls_select_pane_with_pane_id() -> None:
-        tmux = _make_tmux(idle=None)
+    async def test_publishes_event_to_bus() -> None:
+        bus = MagicMock()
         socket_server = AsyncMock()
-        mill = _make_mill(tmux, socket_server)
+        mill = ServerMill(tmux=_make_tmux(), socket_server=socket_server, bus=bus)
 
         await mill.run()
 
         handler = socket_server.start.call_args[0][0]
         result = await handler(_event_json("%3"))
 
-        tmux.select_pane.assert_called_once_with("%3")
-        tmux.mark_window.assert_not_called()
+        bus.publish.assert_called_once_with(
+            Event(
+                app="claude", hook="Notification", payload="", meta={"TMUX_PANE": "%3"}
+            )
+        )
+        assert result == OK_RESPONSE
+
+    @staticmethod
+    @pytest.mark.asyncio
+    async def test_returns_ok_for_valid_event() -> None:
+        socket_server = AsyncMock()
+        mill = _make_mill(_make_tmux(), socket_server)
+
+        await mill.run()
+
+        handler = socket_server.start.call_args[0][0]
+        result = await handler(_event_json())
+
         assert result == OK_RESPONSE
 
     @staticmethod
     @pytest.mark.asyncio
     async def test_returns_error_on_invalid_json() -> None:
-        tmux = _make_tmux()
         socket_server = AsyncMock()
-        mill = _make_mill(tmux, socket_server)
+        mill = _make_mill(_make_tmux(), socket_server)
 
         await mill.run()
 
         handler = socket_server.start.call_args[0][0]
         result = await handler("not json")
 
-        tmux.select_pane.assert_not_called()
-        tmux.mark_window.assert_not_called()
         assert result == ERROR_RESPONSE_INVALID
 
     @staticmethod
     @pytest.mark.asyncio
-    async def test_switches_pane_when_user_is_idle() -> None:
-        tmux = _make_tmux(idle=10.0)
+    async def test_does_not_publish_on_invalid_message() -> None:
+        bus = MagicMock()
         socket_server = AsyncMock()
-        mill = _make_mill(tmux, socket_server)
+        mill = ServerMill(tmux=_make_tmux(), socket_server=socket_server, bus=bus)
 
         await mill.run()
 
         handler = socket_server.start.call_args[0][0]
-        result = await handler(_event_json("%3"))
+        await handler("not json")
 
-        tmux.select_pane.assert_called_once_with("%3")
-        tmux.mark_window.assert_not_called()
-        assert result == OK_RESPONSE
-
-    @staticmethod
-    @pytest.mark.asyncio
-    async def test_marks_window_when_user_is_active() -> None:
-        tmux = _make_tmux(idle=1.0, window_id="@5")
-        socket_server = AsyncMock()
-        mill = _make_mill(tmux, socket_server)
-
-        await mill.run()
-
-        handler = socket_server.start.call_args[0][0]
-        result = await handler(_event_json("%3"))
-
-        tmux.select_pane.assert_not_called()
-        tmux.window_id_for_pane.assert_called_once_with("%3")
-        tmux.mark_window.assert_called_once_with("@5")
-        assert result == OK_RESPONSE
-
-    @staticmethod
-    @pytest.mark.asyncio
-    async def test_does_not_mark_when_window_id_unknown() -> None:
-        tmux = _make_tmux(idle=1.0, window_id=None)
-        socket_server = AsyncMock()
-        mill = _make_mill(tmux, socket_server)
-
-        await mill.run()
-
-        handler = socket_server.start.call_args[0][0]
-        result = await handler(_event_json("%3"))
-
-        tmux.select_pane.assert_not_called()
-        tmux.mark_window.assert_not_called()
-        assert result == OK_RESPONSE
-
-    @staticmethod
-    @pytest.mark.asyncio
-    async def test_switches_pane_at_activity_boundary() -> None:
-        tmux = _make_tmux(idle=5.0)
-        socket_server = AsyncMock()
-        mill = _make_mill(tmux, socket_server)
-
-        await mill.run()
-
-        handler = socket_server.start.call_args[0][0]
-        result = await handler(_event_json("%3"))
-
-        tmux.select_pane.assert_called_once_with("%3")
-        tmux.mark_window.assert_not_called()
-        assert result == OK_RESPONSE
-
-
-class TestClearMarksOnce:
-    @staticmethod
-    @pytest.mark.asyncio
-    async def test_unmarks_window_when_it_becomes_active() -> None:
-        tmux = _make_tmux(idle=1.0, window_id="@5", active_window="@5")
-        socket_server = AsyncMock()
-        mill = _make_mill(tmux, socket_server)
-
-        await mill.run()
-        handler = socket_server.start.call_args[0][0]
-        await handler(_event_json("%3"))
-
-        mill.clear_marks_once()
-
-        tmux.unmark_window.assert_called_once_with("@5")
-
-    @staticmethod
-    @pytest.mark.asyncio
-    async def test_ignores_unmarked_active_window() -> None:
-        tmux = _make_tmux(idle=1.0, window_id="@5", active_window="@7")
-        socket_server = AsyncMock()
-        mill = _make_mill(tmux, socket_server)
-
-        await mill.run()
-        handler = socket_server.start.call_args[0][0]
-        await handler(_event_json("%3"))
-
-        mill.clear_marks_once()
-
-        tmux.unmark_window.assert_not_called()
-
-    @staticmethod
-    @pytest.mark.asyncio
-    async def test_handles_unknown_active_window() -> None:
-        tmux = _make_tmux(idle=1.0, window_id="@5", active_window=None)
-        socket_server = AsyncMock()
-        mill = _make_mill(tmux, socket_server)
-
-        await mill.run()
-        handler = socket_server.start.call_args[0][0]
-        await handler(_event_json("%3"))
-
-        mill.clear_marks_once()
-
-        tmux.unmark_window.assert_not_called()
-
-    @staticmethod
-    @pytest.mark.asyncio
-    async def test_unmarks_only_once_then_stops() -> None:
-        tmux = _make_tmux(idle=1.0, window_id="@5", active_window="@5")
-        socket_server = AsyncMock()
-        mill = _make_mill(tmux, socket_server)
-
-        await mill.run()
-        handler = socket_server.start.call_args[0][0]
-        await handler(_event_json("%3"))
-
-        mill.clear_marks_once()
-        mill.clear_marks_once()
-
-        tmux.unmark_window.assert_called_once_with("@5")
+        bus.publish.assert_not_called()
