@@ -1,3 +1,4 @@
+import math
 import time
 
 import libtmux
@@ -73,11 +74,11 @@ class TmuxLink:
             )
         )
         if line is None:
-            return 0.0
+            return math.inf
         try:
             return time.time() - int(line)
         except ValueError:
-            return 0.0
+            return math.inf
 
     @staticmethod
     def _first_stdout_line(result: tmux_cmd) -> str | None:
