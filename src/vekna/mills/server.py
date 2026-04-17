@@ -21,13 +21,13 @@ class ServerMill:
 
     async def run(self) -> None:
         self._tmux.ensure_session()
-        await self._socket_server.start(self._handle)
+        await self._socket_server.start(self.handle)
         try:
             await asyncio.to_thread(self._tmux.attach)
         finally:
             await self._socket_server.stop()
 
-    async def _handle(self, message: str) -> str:
+    async def handle(self, message: str) -> str:
         try:
             event = Event.model_validate_json(message)
         except ValidationError:
