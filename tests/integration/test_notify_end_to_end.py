@@ -17,6 +17,7 @@ from vekna.mills.bus import EventBus
 from vekna.mills.handlers import ClaudeNotificationHandler, SelectPaneHandler
 from vekna.mills.notify import NotifyClientMill
 from vekna.mills.server import ServerMill
+from vekna.pacts.bus import App, Hook
 from vekna.specs import ATTENTION_POLL_INTERVAL_SECONDS, IDLE_THRESHOLD_SECONDS
 
 _PANE_ID = "%3"
@@ -32,13 +33,13 @@ async def _run(socket_path: str, tmux: MagicMock, payload: str = "{}") -> None:
     socket_server = SocketServerLink(socket_path=socket_path)
     bus = EventBus()
     bus.register(
-        "vekna",
-        "SelectPane",
+        App.VEKNA,
+        Hook.SELECT_PANE,
         SelectPaneHandler(
             tmux, IDLE_THRESHOLD_SECONDS, ATTENTION_POLL_INTERVAL_SECONDS
         ),
     )
-    bus.register("claude", "Notification", ClaudeNotificationHandler(bus))
+    bus.register(App.CLAUDE, Hook.NOTIFICATION, ClaudeNotificationHandler(bus))
 
     server = ServerMill(tmux=tmux, socket_server=socket_server, bus=bus)
     await socket_server.start(server.handle)

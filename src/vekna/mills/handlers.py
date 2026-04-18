@@ -9,6 +9,11 @@ from vekna.pacts.tmux import TmuxLinkProtocol
 
 
 class _ClaudeNotificationPayload(BaseModel):
+    """Validates that the Claude hook payload is a JSON object.
+
+    All fields are accepted and ignored.
+    """
+
     model_config = ConfigDict(extra="ignore")
 
 

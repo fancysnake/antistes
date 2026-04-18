@@ -16,6 +16,8 @@ def _log_task_exception(task: asyncio.Task[None]) -> None:
 
 class EventBus:
     def __init__(self) -> None:
+        # App and Hook are str enums, so raw strings from Event.app/hook
+        # resolve correctly via equality and hash.
         self._handlers: dict[tuple[str, str], list[HandlerProtocol]] = {}
         self._tasks: set[asyncio.Task[None]] = set()
 
