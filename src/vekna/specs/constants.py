@@ -1,7 +1,8 @@
 import hashlib
+import os
 import re
 import tempfile
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 
 _SLUG_CLEAN = re.compile(r"[^a-z0-9]+")
 STEM_DIGEST_LENGTH = 6
@@ -23,11 +24,5 @@ def stem_for_cwd(cwd: Path) -> str:
     return f"vekna-{name}-{digest}"
 
 
-def stem_from_tmux_env(tmux_env: str) -> str:
-    socket_path = tmux_env.split(",", 1)[0]
-    return PurePosixPath(socket_path).name
-
-
-def paths_for(stem: str) -> tuple[str, str, str]:
-    unix_socket_path = str(PurePosixPath(tempfile.gettempdir()) / f"{stem}.sock")
-    return stem, stem, unix_socket_path
+def daemon_socket_path() -> str:
+    return str(Path(tempfile.gettempdir()) / f"vekna-{os.getuid()}.sock")

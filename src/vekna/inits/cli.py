@@ -21,21 +21,19 @@ from vekna.specs import (
     ATTENTION_POLL_INTERVAL_SECONDS,
     ATTENTION_WINDOW_STATUS_STYLE,
     IDLE_THRESHOLD_SECONDS,
-    paths_for,
+    daemon_socket_path,
     stem_for_cwd,
-    stem_from_tmux_env,
 )
 
 
 def _build_server_mill() -> ServerMillProtocol:
     stem = stem_for_cwd(Path.cwd())
-    tmux_socket_name, tmux_session_name, unix_socket_path = paths_for(stem)
     tmux_link = TmuxLink(
-        socket_name=tmux_socket_name,
-        session_name=tmux_session_name,
+        socket_name=stem,
+        session_name=stem,
         attention_style=ATTENTION_WINDOW_STATUS_STYLE,
     )
-    socket_server_link = SocketServerLink(socket_path=unix_socket_path)
+    socket_server_link = SocketServerLink(socket_path=daemon_socket_path())
     bus = EventBus()
     select_handler = SelectPaneHandler(
         tmux_link, IDLE_THRESHOLD_SECONDS, ATTENTION_POLL_INTERVAL_SECONDS
@@ -51,10 +49,8 @@ def _build_server_mill() -> ServerMillProtocol:
     )
 
 
-def _build_notify_client_mill(tmux_env: str) -> NotifyClientMillProtocol:
-    stem = stem_from_tmux_env(tmux_env)
-    _, _, unix_socket_path = paths_for(stem)
-    socket_client_link = SocketClientLink(socket_path=unix_socket_path)
+def _build_notify_client_mill() -> NotifyClientMillProtocol:
+    socket_client_link = SocketClientLink(socket_path=daemon_socket_path())
     return NotifyClientMill(socket_client=socket_client_link)
 
 
