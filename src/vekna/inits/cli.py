@@ -101,6 +101,7 @@ def init_command() -> Group:
     click_gate = ClickGate(
         server_mill_factory=_build_server_mill,
         notify_client_mill_factory=_build_notify_client_mill,
+        ensure_daemon=ensure_daemon_running,
     )
     return click_gate.build_group()
 
