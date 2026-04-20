@@ -27,12 +27,7 @@ from vekna.specs import (
 
 
 def _build_server_mill() -> ServerMillProtocol:
-    stem = stem_for_cwd(Path.cwd())
-    tmux_link = TmuxLink(
-        socket_name=stem,
-        session_name=stem,
-        attention_style=ATTENTION_WINDOW_STATUS_STYLE,
-    )
+    tmux_link = TmuxLink(attention_style=ATTENTION_WINDOW_STATUS_STYLE)
     socket_server_link = SocketServerLink(socket_path=daemon_socket_path())
     bus = EventBus()
     select_handler = SelectPaneHandler(
@@ -45,6 +40,7 @@ def _build_server_mill() -> ServerMillProtocol:
         tmux=tmux_link,
         socket_server=socket_server_link,
         bus=bus,
+        session_name_for_cwd=lambda cwd: stem_for_cwd(Path(cwd)),
         background=[select_handler.clear_marks_loop],
     )
 

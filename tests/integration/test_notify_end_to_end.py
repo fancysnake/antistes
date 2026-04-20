@@ -25,6 +25,7 @@ _PANE_ID = "%3"
 
 def _make_tmux(*, seconds_idle: float) -> MagicMock:
     tmux = MagicMock()
+    tmux.session_name_for_pane.return_value = "work"
     tmux.last_activity_seconds_ago.return_value = seconds_idle
     return tmux
 
@@ -41,7 +42,12 @@ async def _run(socket_path: str, tmux: MagicMock, payload: str = "{}") -> None:
     )
     bus.register(App.CLAUDE, Hook.NOTIFICATION, ClaudeNotificationHandler(bus))
 
-    server = ServerMill(tmux=tmux, socket_server=socket_server, bus=bus)
+    server = ServerMill(
+        tmux=tmux,
+        socket_server=socket_server,
+        bus=bus,
+        session_name_for_cwd=lambda cwd: f"vekna-{Path(cwd).name}-abc123",
+    )
     await socket_server.start(server.handle)
 
     client = NotifyClientMill(socket_client=SocketClientLink(socket_path=socket_path))

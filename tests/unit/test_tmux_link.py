@@ -14,38 +14,30 @@ def _mock_cmd(stdout: list[str] | None = None) -> MagicMock:
     return result
 
 
-def _make_link(
-    socket_name: str = "default",
-    session_name: str = "work",
-    attention_style: str = "bg=red",
-) -> tuple[TmuxLink, MagicMock]:
+def _make_link(attention_style: str = "bg=red") -> tuple[TmuxLink, MagicMock]:
     with patch("vekna.links.tmux.libtmux") as mock_lib:
         mock_server = MagicMock()
         mock_lib.Server.return_value = mock_server
-        link = TmuxLink(
-            socket_name=socket_name,
-            session_name=session_name,
-            attention_style=attention_style,
-        )
+        link = TmuxLink(attention_style=attention_style)
         return link, mock_server
 
 
 class TestEnsureSession:
     @staticmethod
     def test_creates_session_when_absent() -> None:
-        link, server = _make_link(session_name="work")
+        link, server = _make_link()
         server.has_session.return_value = False
 
-        link.ensure_session()
+        link.ensure_session("work")
 
         server.new_session.assert_called_once_with(session_name="work")
 
     @staticmethod
     def test_skips_creation_when_session_exists() -> None:
-        link, server = _make_link(session_name="work")
+        link, server = _make_link()
         server.has_session.return_value = True
 
-        link.ensure_session()
+        link.ensure_session("work")
 
         server.new_session.assert_not_called()
 
@@ -53,9 +45,9 @@ class TestEnsureSession:
 class TestAttach:
     @staticmethod
     def test_attaches_to_named_session() -> None:
-        link, server = _make_link(session_name="work")
+        link, server = _make_link()
 
-        link.attach()
+        link.attach("work")
 
         server.attach_session.assert_called_once_with(target_session="work")
 
@@ -101,17 +93,17 @@ class TestWindowIdForPane:
         assert link.window_id_for_pane("%3") is None
 
 
-class TestActiveWindowId:
+class TestSessionNameForPane:
     @staticmethod
-    def test_returns_active_window_id() -> None:
+    def test_returns_session_name() -> None:
         link, server = _make_link()
-        server.cmd.return_value = _mock_cmd(stdout=["@1"])
+        server.cmd.return_value = _mock_cmd(stdout=["work"])
 
-        result = link.active_window_id()
+        result = link.session_name_for_pane("%3")
 
-        assert result == "@1"
+        assert result == "work"
         server.cmd.assert_called_once_with(
-            "display-message", "-p", "-F", "#{window_id}"
+            "display-message", "-p", "-t", "%3", "-F", "#{session_name}"
         )
 
     @staticmethod
@@ -119,7 +111,28 @@ class TestActiveWindowId:
         link, server = _make_link()
         server.cmd.return_value = _mock_cmd(stdout=[])
 
-        assert link.active_window_id() is None
+        assert link.session_name_for_pane("%3") is None
+
+
+class TestActiveWindowId:
+    @staticmethod
+    def test_returns_active_window_id() -> None:
+        link, server = _make_link()
+        server.cmd.return_value = _mock_cmd(stdout=["@1"])
+
+        result = link.active_window_id("work")
+
+        assert result == "@1"
+        server.cmd.assert_called_once_with(
+            "display-message", "-p", "-t", "work", "-F", "#{window_id}"
+        )
+
+    @staticmethod
+    def test_returns_none_when_no_stdout() -> None:
+        link, server = _make_link()
+        server.cmd.return_value = _mock_cmd(stdout=[])
+
+        assert link.active_window_id("work") is None
 
 
 class TestMarkWindow:
@@ -149,9 +162,9 @@ class TestUnmarkWindow:
 class TestDisplayMessage:
     @staticmethod
     def test_sends_display_message_to_session() -> None:
-        link, server = _make_link(session_name="work")
+        link, server = _make_link()
 
-        link.display_message("something went wrong")
+        link.display_message("something went wrong", "work")
 
         server.cmd.assert_called_once_with(
             "display-message", "-t", "work", "something went wrong"
@@ -161,31 +174,31 @@ class TestDisplayMessage:
 class TestLastActivitySecondsAgo:
     @staticmethod
     def test_returns_inf_when_no_stdout() -> None:
-        link, server = _make_link(session_name="work")
+        link, server = _make_link()
         server.cmd.return_value = _mock_cmd(stdout=[])
 
-        result = link.last_activity_seconds_ago()
+        result = link.last_activity_seconds_ago("work")
 
         assert result == math.inf
 
     @staticmethod
     def test_returns_inf_when_value_is_not_an_integer() -> None:
-        link, server = _make_link(session_name="work")
+        link, server = _make_link()
         server.cmd.return_value = _mock_cmd(stdout=["bad"])
 
-        result = link.last_activity_seconds_ago()
+        result = link.last_activity_seconds_ago("work")
 
         assert result == math.inf
 
     @staticmethod
     def test_returns_elapsed_seconds_since_client_activity() -> None:
-        link, server = _make_link(session_name="work")
+        link, server = _make_link()
         now = int(time.time())
         server.cmd.return_value = _mock_cmd(stdout=[str(now - _ACTIVITY_OFFSET)])
 
-        result = link.last_activity_seconds_ago()
+        result = link.last_activity_seconds_ago("work")
 
         assert _ACTIVITY_OFFSET - 1 < result < _ACTIVITY_OFFSET + _ACTIVITY_TOLERANCE
         server.cmd.assert_called_once_with(
-            "display-message", "-p", "-F", "#{client_activity}"
+            "display-message", "-p", "-t", "work", "-F", "#{client_activity}"
         )
